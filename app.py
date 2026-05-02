@@ -4,6 +4,8 @@ from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
 from supabase import create_client
+from linebot.models import LocationMessage, LocationSendMessage
+from linebot.models import FlexSendMessage
 
 app = Flask(__name__)
 
@@ -24,8 +26,6 @@ def callback():
     except InvalidSignatureError:
         abort(400)
     return 'OK'
-
-from linebot.models import FlexSendMessage
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
