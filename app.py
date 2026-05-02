@@ -65,5 +65,17 @@ def handle_message(event):
         # 其他文字處理...
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="輸入「選單」開啟功能"))
 
+@handler.add(MessageEvent, message=LocationMessage)
+def handle_location(event):
+    lat = event.message.latitude  # 緯度
+    lon = event.message.longitude # 經度
+    address = event.message.address # 地址
+    
+    # 這裡之後會用來寫入資料庫
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text=f"收到位置：{address}\n座標：({lat}, {lon})\n接下來請告訴我大分類？")
+    )
+
 if __name__ == "__main__":
     app.run()
