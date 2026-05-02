@@ -25,20 +25,45 @@ def callback():
         abort(400)
     return 'OK'
 
+from linebot.models import FlexSendMessage
+
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_text = event.message.text
-    user_id = event.source.user_id
     
-    # 測試：把說話紀錄存進 Supabase (這會用到妳之前創的 user_status 表)
-    # 如果還沒創好表，這部分會報錯，但沒關係，我們先測試回話
-    try:
-        supabase.table("user_status").upsert({"user_id": user_id, "user_name": "Dorothy"}).execute()
-        reply = f"妳說了：{user_text}\n(資料庫已更新！)"
-    except:
-        reply = f"妳說了：{user_text}\n(資料庫連線測試中...)"
-
-    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
+    # 當使用者傳送「選單」或剛加入好友時
+    if user_text == "選單" or user_text == "開始使用":
+        flex_menu = {
+          "type": "bubble",
+          "body": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+              {"type": "text", "text": "🍽️ 美食小助手", "weight": "bold", "size": "xl"},
+              {"type": "text", "text": "今天要怎麼犒賞自己？", "size": "sm", "color": "#aaaaaa"},
+              {"type": "separator", "margin": "md"},
+              {
+                "type": "button",
+                "action": {"type": "message", "label": "✨ 發現了好吃的店!", "text": "新增餐廳"},
+                "style": "primary", "margin": "md", "color": "#4b7a47"
+              },
+              {
+                "type": "button",
+                "action": {"type": "message", "label": "⏰ 吃飯時間到了", "text": "肚子餓了"},
+                "style": "secondary", "margin": "sm"
+              },
+              {
+                "type": "button",
+                "action": {"type": "message", "label": "📒 查看與修訂清單", "text": "我的清單"},
+                "style": "link", "margin": "sm"
+              }
+            ]
+          }
+        }
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="請選擇功能", contents=flex_menu))
+    else:
+        # 其他文字處理...
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="輸入「選單」開啟功能"))
 
 if __name__ == "__main__":
     app.run()
