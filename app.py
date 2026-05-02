@@ -36,9 +36,36 @@ def handle_message(event):
     if user_text == "選單":
         # 重置資料庫狀態，防止卡死
         supabase.table("user_status").update({"current_step": "idle"}).eq("user_id", user_id).execute()
-        
-        # ... 這裡放妳原本的 Flex Message 選單代碼 ...
-        line_bot_api.reply_message(event.reply_token, FlexSendMessage(...))
+
+        flex_menu = {
+          "type": "bubble",
+          "body": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+              {"type": "text", "text": "🍽️ 美食小助手", "weight": "bold", "size": "xl"},
+              {"type": "text", "text": "今天要怎麼犒賞自己？", "size": "sm", "color": "#aaaaaa"},
+              {"type": "separator", "margin": "md"},
+              {
+                "type": "button",
+                "action": {"type": "message", "label": "✨ 發現了好吃的店!", "text": "新增餐廳"},
+                "style": "primary", "margin": "md", "color": "#4b7a47"
+              },
+              {
+                "type": "button",
+                "action": {"type": "message", "label": "⏰ 吃飯時間到了", "text": "肚子餓了"},
+                "style": "secondary", "margin": "sm"
+              },
+              {
+                "type": "button",
+                "action": {"type": "message", "label": "📒 查看與修訂清單", "text": "我的清單"},
+                "style": "link", "margin": "sm"
+              }
+            ]
+          }
+        }
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="請選擇功能", contents=flex_menu))
+    
         return # 結束這個 function，不要往下跑了
 
     # 2. 只有在不是「選單」的情況下，才去抓取狀態
