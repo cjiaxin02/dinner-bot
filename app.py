@@ -32,25 +32,27 @@ def handle_message(event):
     user_id = event.source.user_id
     user_text = event.message.text
     
-    # 先抓出這個人的目前狀態
+    # 1. 無論狀態為何，只要輸入「選單」就強制重置並顯示選單
+    if user_text == "選單":
+        # 重置資料庫狀態，防止卡死
+        supabase.table("user_status").update({"current_step": "idle"}).eq("user_id", user_id).execute()
+        
+        # ... 這裡放妳原本的 Flex Message 選單代碼 ...
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(...))
+        return # 結束這個 function，不要往下跑了
+
+    # 2. 只有在不是「選單」的情況下，才去抓取狀態
     res = supabase.table("user_status").select("*").eq("user_id", user_id).execute()
     user_data = res.data[0] if res.data else {}
     current_step = user_data.get("current_step", "idle")
 
-    if user_text == "選單":
-        # ... 原本的選單代碼 ...
+    # 3. 根據狀態處理對話
+    if current_step == "awaiting_category" and user_text.startswith("分類:"):
+        # ... 處理分類的代碼 ...
         pass
-
-    elif current_step == "awaiting_category" and user_text.startswith("分類:"):
-        category = user_text.split(":")[1]
-        
-        # 更新步驟到下一個：等小標籤
-        supabase.table("user_status").update({"current_step": "awaiting_tags"}).eq("user_id", user_id).execute()
-        
-        line_bot_api.reply_message(
-            event.reply_token, 
-            TextSendMessage(text=f"已設定為【{category}】！\n接下來請輸入「小標籤」，多個標籤請用空格隔開（例如：有插座 環境美），若不填請輸入「無」。")
-        )
+    elif current_step == "awaiting_tags":
+        # ... 處理標籤的代碼 ...
+        pass
 
 @handler.add(MessageEvent, message=LocationMessage)
 def handle_location(event):
