@@ -124,7 +124,6 @@ def handle_message(event):
 
             tag_contents = []
             for tag in tag_list[:3]:  # 取前三個標籤
-            for tag in tag_list[:3]: 
                 tag_contents.append({
                     "type": "text",
                     "text": tag,
