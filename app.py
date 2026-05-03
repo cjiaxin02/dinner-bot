@@ -111,13 +111,14 @@ def handle_message(event):
         bubbles = []
         # 前 10 筆正常顯示
         for s in shops[:10]:
-            # --- 1. 核心修正：確保 tag_list 無論如何都會被定義 ---
-            tags_str = s.get('tags') or ""  # 避免 NoneType 報錯
-            tag_list = tags_str.split() if tags_str else [] 
-            
-            # 建立標籤組的內容清單
+            # --- 關鍵修正：在這裡定義 tag_list ---
+            # 從當前這筆餐廳 s 取得 'tags' 欄位，若為空則給空字串
+            raw_tags = s.get('tags') or "" 
+            # 將 "#標籤1 #標籤2" 切割成 ['#標籤1', '#標籤2']
+            tag_list = raw_tags.split() 
+
             tag_contents = []
-            for tag in tag_list[:3]:  # 取前三個標籤
+            for tag in tag_list[:3]: 
                 tag_contents.append({
                     "type": "text",
                     "text": tag,
