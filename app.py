@@ -111,6 +111,19 @@ def handle_message(event):
         bubbles = []
         # 前 10 筆正常顯示
         for s in shops[:10]:
+            tag_contents = []
+            for tag in tag_list[:3]: # 最多顯示前三個標籤，避免破版
+                tag_contents.append({
+                    "type": "text",
+                    "text": tag,
+                    "size": "xxs",
+                    "color": "#ffffff",
+                    "backgroundColor": "#7ba376", # 妳喜歡的 City Boy 風格綠色
+                    "margin": "xs",
+                    "paddingAll": "2px",
+                    "contents": [],
+                    "flex": 0
+                })
             bubbles.append({
                 "type": "bubble",
                 "size": "micro",
@@ -118,6 +131,13 @@ def handle_message(event):
                     "type": "box", "layout": "vertical", "contents": [
                         {"type": "text", "text": s['name'], "weight": "bold", "size": "md"},
                         {"type": "text", "text": f"📍 {s['category']}", "size": "xs", "color": "#4b7a47"}
+                        {
+                            "type": "box",
+                            "layout": "horizontal",
+                            "margin": "md",
+                            "contents": tag_contents
+                        },
+                        {"type": "text", "text": s['address'] or "無地址資訊", "size": "xxs", "color": "#aaaaaa", "wrap": True, "margin": "md"}
                     ]
                 },
                 "footer": {
@@ -179,7 +199,7 @@ def handle_message(event):
             ]
             
             # 動態加入妳有的分類
-            for cat in categories[:3]: # 取前三個
+            for cat in categories[:5]: # 取前五個
                 filter_buttons.append({
                     "type": "button", "action": {"type": "message", "label": f"🔍 {cat}", "text": f"清單:分類:{cat}"}, "style": "secondary"
                 })
@@ -202,7 +222,7 @@ def handle_message(event):
             # 狀態維持在等待分類，但提示使用者直接輸入文字
             line_bot_api.reply_message(
                 event.reply_token,
-                TextSendMessage(text="請直接輸入妳想設定的大分類名稱（例如：早午餐、熱炒）：")
+                TextSendMessage(text="請直接輸入妳想設定的大分類名稱（例如：主食、甜點、飲料）：")
             )
             return
             
