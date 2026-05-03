@@ -111,40 +111,49 @@ def handle_message(event):
         bubbles = []
         # 前 10 筆正常顯示
         for s in shops[:10]:
+            # --- 1. 核心修正：確保 tag_list 無論如何都會被定義 ---
+            tags_str = s.get('tags') or ""  # 避免 NoneType 報錯
+            tag_list = tags_str.split() if tags_str else [] 
+            
+            # 建立標籤組的內容清單
             tag_contents = []
-            for tag in tag_list[:3]: # 最多顯示前三個標籤，避免破版
+            for tag in tag_list[:3]:  # 取前三個標籤
                 tag_contents.append({
                     "type": "text",
                     "text": tag,
                     "size": "xxs",
                     "color": "#ffffff",
-                    "backgroundColor": "#7ba376", # 妳喜歡的 City Boy 風格綠色
+                    "backgroundColor": "#7ba376",
                     "margin": "xs",
                     "paddingAll": "2px",
-                    "contents": [],
                     "flex": 0
                 })
+
+            # --- 2. 組裝卡片 ---
             bubbles.append({
                 "type": "bubble",
                 "size": "micro",
                 "body": {
-                    "type": "box", "layout": "vertical", "contents": [
+                    "type": "box", 
+                    "layout": "vertical", 
+                    "contents": [
                         {"type": "text", "text": s['name'], "weight": "bold", "size": "md"},
-                        {"type": "text", "text": f"📍 {s['category']}", "size": "xs", "color": "#4b7a47"},
+                        {"type": "text", "text": f"📍 {s['category']}", "size": "xs", "color": "#4b7a47", "margin": "xs"},
+                        # 插入標籤容器
                         {
                             "type": "box",
                             "layout": "horizontal",
                             "margin": "md",
-                            "contents": tag_contents
+                            "contents": tag_contents  # 這裡會用到上面的 tag_contents
                         },
                         {"type": "text", "text": s['address'] or "無地址資訊", "size": "xxs", "color": "#aaaaaa", "wrap": True, "margin": "md"}
                     ]
                 },
                 "footer": {
-                    "type": "box", "layout": "vertical", "spacing": "sm", "contents": [
-                        {"type": "button", "style": "link", "height": "sm", "action": {"type": "uri", "label": "導航", "uri": f"https://www.google.com/maps/search/?api=1&query={s['lat']},{s['lon']}"}},
-                        # 刪除按鈕：觸發 Postback 避免誤觸
-                        {"type": "button", "style": "link", "height": "sm", "color": "#FF5555", "action": {"type": "postback", "label": "🗑️ 刪除", "data": f"action=confirm_del&res_id={s['id']}&res_name={s['name']}"}}
+                    "type": "box", 
+                    "layout": "vertical", 
+                    "contents": [
+                        {"type": "button", "style": "link", "height": "sm", "action": {"type": "uri", "label": "導航", "uri": f"https://www.google.com/maps/search/?api=1&query={s['lat']},{s['lon']}"}}
                     ]
                 }
             })
