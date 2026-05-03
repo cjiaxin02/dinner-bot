@@ -94,55 +94,7 @@ def handle_message(event):
         return
 
     # B. 根據狀態分流處理對話
-    if current_step == "idle":
-        if user_text == "新增餐廳":
-            # 將狀態切換為 awaiting_location
-            supabase.table("user_status").update({"current_step": "awaiting_location"}).eq("user_id", user_id).execute()
-            
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text="太棒了！請點選左下角「＋」號，選擇「傳送位置資訊」，告訴我這家店在哪裡～")
-            )
-            return
-        elif user_text == "肚子餓了":
-            # 1. 將狀態切換為 awaiting_user_location
-            supabase.table("user_status").update({"current_step": "awaiting_user_location"}).eq("user_id", user_id).execute()
-            
-            # 2. 提示使用者傳送「現在」的位置
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text="肚子餓了嗎？請傳送妳『現在的位置資訊』，我幫妳找找方圓 1 公里內好吃的！")
-            )
-            return
-        elif user_text == "我的清單":
-            # 1. 撈取該用戶現有的所有不重複分類
-            res = supabase.table("restaurants").select("category").eq("user_id", user_id).execute()
-            categories = list(set([r['category'] for r in res.data if r['category']]))
-            
-            # 2. 組裝篩選按鈕 (Flex Message)
-            filter_buttons = [
-                {"type": "button", "action": {"type": "message", "label": "📋 顯示全部", "text": "清單:全部"}, "style": "primary", "color": "#4b7a47"}
-            ]
-            
-            # 動態加入妳有的分類
-            for cat in categories[:3]: # 取前三個
-                filter_buttons.append({
-                    "type": "button", "action": {"type": "message", "label": f"🔍 {cat}", "text": f"清單:分類:{cat}"}, "style": "secondary"
-                })
-    
-            filter_flex = {
-                "type": "bubble",
-                "body": {
-                    "type": "box", "layout": "vertical", "spacing": "md", "contents": [
-                        {"type": "text", "text": "📒 我的美食帳本", "weight": "bold", "size": "xl"},
-                        {"type": "text", "text": "請選擇篩選方式：", "size": "sm", "color": "#888888"},
-                        {"type": "box", "layout": "vertical", "spacing": "sm", "contents": filter_buttons}
-                    ]
-                }
-            }
-            line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="查看清單", contents=filter_flex))
-            return
-    elif user_text.startswith("清單:"):
+    if user_text.startswith("清單:"):
         # 解析分頁參數，例如 "清單:全部:10" 代表從第 10 筆開始抓
         parts = user_text.split(":")
         offset = int(parts[-1]) if parts[-1].isdigit() else 0
@@ -195,6 +147,55 @@ def handle_message(event):
             })
 
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="餐廳清單", contents={"type": "carousel", "contents": bubbles}))
+
+    if current_step == "idle":
+        if user_text == "新增餐廳":
+            # 將狀態切換為 awaiting_location
+            supabase.table("user_status").update({"current_step": "awaiting_location"}).eq("user_id", user_id).execute()
+            
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="太棒了！請點選左下角「＋」號，選擇「傳送位置資訊」，告訴我這家店在哪裡～")
+            )
+            return
+        elif user_text == "肚子餓了":
+            # 1. 將狀態切換為 awaiting_user_location
+            supabase.table("user_status").update({"current_step": "awaiting_user_location"}).eq("user_id", user_id).execute()
+            
+            # 2. 提示使用者傳送「現在」的位置
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="肚子餓了嗎？請傳送妳『現在的位置資訊』，我幫妳找找方圓 1 公里內好吃的！")
+            )
+            return
+        elif user_text == "我的清單":
+            # 1. 撈取該用戶現有的所有不重複分類
+            res = supabase.table("restaurants").select("category").eq("user_id", user_id).execute()
+            categories = list(set([r['category'] for r in res.data if r['category']]))
+            
+            # 2. 組裝篩選按鈕 (Flex Message)
+            filter_buttons = [
+                {"type": "button", "action": {"type": "message", "label": "📋 顯示全部", "text": "清單:全部"}, "style": "primary", "color": "#4b7a47"}
+            ]
+            
+            # 動態加入妳有的分類
+            for cat in categories[:3]: # 取前三個
+                filter_buttons.append({
+                    "type": "button", "action": {"type": "message", "label": f"🔍 {cat}", "text": f"清單:分類:{cat}"}, "style": "secondary"
+                })
+    
+            filter_flex = {
+                "type": "bubble",
+                "body": {
+                    "type": "box", "layout": "vertical", "spacing": "md", "contents": [
+                        {"type": "text", "text": "📒 我的美食帳本", "weight": "bold", "size": "xl"},
+                        {"type": "text", "text": "請選擇篩選方式：", "size": "sm", "color": "#888888"},
+                        {"type": "box", "layout": "vertical", "spacing": "sm", "contents": filter_buttons}
+                    ]
+                }
+            }
+            line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="查看清單", contents=filter_flex))
+            return
         
     elif current_step == "awaiting_category":
         if user_text == "動作:自定義分類":
