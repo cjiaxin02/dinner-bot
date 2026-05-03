@@ -68,18 +68,37 @@ def handle_message(event):
     
         return # 結束這個 function，不要往下跑了
 
+    # --- 優先級 B: 觸發功能入口 ---
+    if user_text == "新增餐廳":
+        # 1. 將狀態設為「等待位置」
+        supabase.table("user_status").update({"current_step": "awaiting_location"}).eq("user_id", user_id).execute()
+        # 2. 提示使用者傳送位置
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="太棒了！請點選左下角「＋」號，選擇「傳送位置資訊」，告訴我這家店在哪裡～")
+        )
+        return
+    
     # 2. 只有在不是「選單」的情況下，才去抓取狀態
     res = supabase.table("user_status").select("*").eq("user_id", user_id).execute()
     user_data = res.data[0] if res.data else {}
     current_step = user_data.get("current_step", "idle")
 
-    # 3. 根據狀態處理對話
+    # 處理「大分類」的選擇
     if current_step == "awaiting_category" and user_text.startswith("分類:"):
-        # ... 處理分類的代碼 ...
-        pass
-    elif current_step == "awaiting_tags":
-        # ... 處理標籤的代碼 ...
-        pass
+        category = user_text.split(":")[1]
+        
+        # 將大分類存入暫存 (這裡需要妳在 SQL 增加 temp_category 欄位)
+        supabase.table("user_status").update({
+            "current_step": "awaiting_tags",
+            "temp_category": category # 建議在 SQL 增加這個欄位
+        }).eq("user_id", user_id).execute()
+        
+        # 這裡改用 Flex Message 送出「小標籤」按鈕
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=f"已設定為【{category}】！\n接下來請輸入「小標籤」，多個標籤請用空格隔開（例如：有插座 環境美），若不填請輸入「無」。")
+        )
 
 @handler.add(MessageEvent, message=LocationMessage)
 def handle_location(event):
