@@ -7,6 +7,9 @@ from supabase import create_client
 from linebot.models import LocationMessage, LocationSendMessage
 from linebot.models import FlexSendMessage
 from datetime import datetime, timedelta
+from linebot.models import PostbackEvent # <--- 確保這行有加進去
+# 同時為了處理 Postback 的資料解析，補上這行
+from urllib.parse import parse_qsl
 import math # 記得在檔案最上方加上這行
 
 def get_distance(lat1, lon1, lat2, lon2):
