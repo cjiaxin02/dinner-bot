@@ -57,7 +57,7 @@ def handle_message(event):
           },
           "body": {
             "type": "box", "layout": "vertical", "contents": [
-              {"type": "text", "text": "Dorothy, 今天想吃什麼？", "size": "sm", "color": "#888888"},
+              {"type": "text", "text": "今天想吃什麼？", "size": "sm", "color": "#888888"},
               {"type": "box", "layout": "vertical", "margin": "lg", "spacing": "sm", "contents": [
                   {
                     "type": "button", "style": "primary", "color": "#4b7a47",
