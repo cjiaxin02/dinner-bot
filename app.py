@@ -169,26 +169,53 @@ def handle_location(event):
         }).eq("user_id", user_id).execute()
 
         # 2. 噴出大分類選擇圖卡
-        category_flex = {
-            "type": "bubble",
-            "header": {
-                "type": "box", "layout": "vertical", "contents": [
-                    {"type": "text", "text": "📍 位置已記錄", "color": "#ffffff", "weight": "bold", "size": "sm"}
-                ], "backgroundColor": "#4b7a47"
-            },
-            "body": {
-                "type": "box", "layout": "vertical", "contents": [
-                    {"type": "text", "text": title, "weight": "bold", "size": "xl"},
-                    {"type": "text", "text": "請選擇這家店的大分類：", "size": "sm", "color": "#888888", "margin": "md"},
-                    {"type": "box", "layout": "vertical", "margin": "lg", "spacing": "sm", "contents": [
-                        {"type": "button", "action": {"type": "message", "label": "🍚 主食", "text": "分類:主食"}, "style": "primary", "color": "#E67E22"},
-                        {"type": "button", "action": {"type": "message", "label": "🍰 甜點", "text": "分類:甜點"}, "style": "primary", "color": "#F1C40F"},
-                        {"type": "button", "action": {"type": "message", "label": "🥤 飲料", "text": "分類:飲料"}, "style": "primary", "color": "#2ECC71"},
-                        {"type": "button", "action": {"type": "message", "label": "➕ 新增分類", "text": "動作:自定義分類"}, "style": "secondary"}
-                    ]}
-                ]
-            }
+        # 1. 從餐廳表撈出該用戶存過、不重複的前幾個大分類
+    existing_cats_res = supabase.table("restaurants") \
+        .select("category") \
+        .eq("user_id", user_id) \
+        .execute()
+    
+    # 使用 set 取得不重複的分類，並過濾掉 None
+    user_categories = list(set([r['category'] for r in existing_cats_res.data if r['category']]))
+    # 只取前 3 個預設+妳新增過的，留位置給「新增分類」按鈕
+    display_cats = user_categories[:3] 
+    
+    # 如果完全沒資料，給幾個預設值
+    if not display_cats:
+        display_cats = ["主食", "甜點", "飲料"]
+
+    # 2. 動態組裝按鈕清單
+    buttons = []
+    for cat in display_cats:
+        buttons.append({
+            "type": "button",
+            "action": {"type": "message", "label": f"🍚 {cat}", "text": f"分類:{cat}"},
+            "style": "primary", "color": "#4b7a47", "margin": "sm"
+        })
+    
+    # 永遠保留「新增分類」按鈕
+    buttons.append({
+        "type": "button",
+        "action": {"type": "message", "label": "➕ 新增其他分類", "text": "動作:自定義分類"},
+        "style": "secondary", "margin": "sm"
+    })
+
+    # 3. 組裝完整的 Flex Message
+    category_flex = {
+        "type": "bubble",
+        "header": {
+            "type": "box", "layout": "vertical", "contents": [
+                {"type": "text", "text": "📍 位置已記錄", "color": "#ffffff", "weight": "bold", "size": "sm"}
+            ], "backgroundColor": "#4b7a47"
+        },
+        "body": {
+            "type": "box", "layout": "vertical", "contents": [
+                {"type": "text", "text": title, "weight": "bold", "size": "xl"},
+                {"type": "text", "text": "請選擇分類（包含妳新增過的）：", "size": "sm", "color": "#888888", "margin": "md"},
+                {"type": "box", "layout": "vertical", "margin": "lg", "contents": buttons}
+            ]
         }
+    }
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="請選擇分類", contents=category_flex))
 
 if __name__ == "__main__":
