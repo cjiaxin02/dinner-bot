@@ -94,28 +94,37 @@ def handle_message(event):
             # [ 待填入：啟動抽籤邏輯 ]
             pass
 
-    elif current_step == "awaiting_category" and user_text.startswith("分類:"):
-        category = user_text.split(":")[1]
-        
-        # 紀錄分類並進入「等待標籤」狀態
-        supabase.table("user_status").update({
-            "current_step": "awaiting_tags",
-            "temp_category": category
-        }).eq("user_id", user_id).execute()
-        
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=f"已設定為【{category}】！\n最後一步：請輸入「小標籤」（例如：有插座 環境美），多個標籤請用空格隔開。\n若不想填寫，請直接回傳「無」。")
-        )
+    elif current_step == "awaiting_category":
+        if user_text == "動作:自定義分類":
+            # 狀態維持在等待分類，但提示使用者直接輸入文字
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="請直接輸入妳想設定的大分類名稱（例如：早午餐、熱炒）：")
+            )
+            return
+            
+        elif user_text.startswith("分類:") or user_status.get("current_step") == "awaiting_category":
+            # 如果是點擊按鈕，去掉前綴；如果是直接輸入，就直接用 user_text
+            category = user_text.split(":")[1] if user_text.startswith("分類:") else user_text
+            
+            supabase.table("user_status").update({
+                "current_step": "awaiting_tags",
+                "temp_category": category
+            }).eq("user_id", user_id).execute()
+            
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=f"已設定為【{category}】！\n最後一步：請輸入「小標籤」，若不填請輸入「無」。")
+            )
+            return
 
     elif current_step == "awaiting_tags":
         tags = user_text if user_text != "無" else ""
-        
-        # 1. 從暫存區撈出剛才存的所有資訊
         user_data = supabase.table("user_status").select("*").eq("user_id", user_id).single().execute().data
         
-        # 2. 正式寫入餐廳主表
+        # 正式入庫，這次加上了 user_id
         supabase.table("restaurants").insert({
+            "user_id": user_id,  # <--- 重要：記錄是誰存的
             "name": user_data["temp_name"],
             "category": user_data["temp_category"],
             "tags": tags,
@@ -175,7 +184,7 @@ def handle_location(event):
                         {"type": "button", "action": {"type": "message", "label": "🍚 主食", "text": "分類:主食"}, "style": "primary", "color": "#E67E22"},
                         {"type": "button", "action": {"type": "message", "label": "🍰 甜點", "text": "分類:甜點"}, "style": "primary", "color": "#F1C40F"},
                         {"type": "button", "action": {"type": "message", "label": "🥤 飲料", "text": "分類:飲料"}, "style": "primary", "color": "#2ECC71"},
-                        {"type": "button", "action": {"type": "message", "label": "🏪 超商", "text": "分類:超商"}, "style": "secondary"}
+                        {"type": "button", "action": {"type": "message", "label": "➕ 新增分類", "text": "動作:自定義分類"}, "style": "secondary"}
                     ]}
                 ]
             }
