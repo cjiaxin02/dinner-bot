@@ -6,6 +6,16 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage
 from supabase import create_client
 from linebot.models import LocationMessage, LocationSendMessage
 from linebot.models import FlexSendMessage
+import math # 記得在檔案最上方加上這行
+
+def get_distance(lat1, lon1, lat2, lon2):
+    # Haversine 公式：計算球面上兩點距離
+    R = 6371  # 地球半徑 (km)
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
 
 app = Flask(__name__)
 
@@ -91,8 +101,15 @@ def handle_message(event):
             )
             return
         elif user_text == "肚子餓了":
-            # [ 待填入：啟動抽籤邏輯 ]
-            pass
+            # 1. 將狀態切換為 awaiting_user_location
+            supabase.table("user_status").update({"current_step": "awaiting_user_location"}).eq("user_id", user_id).execute()
+            
+            # 2. 提示使用者傳送「現在」的位置
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="肚子餓了嗎？請傳送妳『現在的位置資訊』，我幫妳找找方圓 1 公里內好吃的！")
+            )
+            return
 
     elif current_step == "awaiting_category":
         if user_text == "動作:自定義分類":
@@ -170,53 +187,89 @@ def handle_location(event):
 
         # 2. 噴出大分類選擇圖卡
         # 1. 從餐廳表撈出該用戶存過、不重複的前幾個大分類
-    existing_cats_res = supabase.table("restaurants") \
-        .select("category") \
-        .eq("user_id", user_id) \
-        .execute()
+        existing_cats_res = supabase.table("restaurants") \
+            .select("category") \
+            .eq("user_id", user_id) \
+            .execute()
+        
+        # 使用 set 取得不重複的分類，並過濾掉 None
+        user_categories = list(set([r['category'] for r in existing_cats_res.data if r['category']]))
+        # 只取前 5 個預設+妳新增過的，留位置給「新增分類」按鈕
+        display_cats = user_categories[:5] 
+        
     
-    # 使用 set 取得不重複的分類，並過濾掉 None
-    user_categories = list(set([r['category'] for r in existing_cats_res.data if r['category']]))
-    # 只取前 3 個預設+妳新增過的，留位置給「新增分類」按鈕
-    display_cats = user_categories[:3] 
-    
-    # 如果完全沒資料，給幾個預設值
-    if not display_cats:
-        display_cats = ["主食", "甜點", "飲料"]
-
-    # 2. 動態組裝按鈕清單
-    buttons = []
-    for cat in display_cats:
+        # 2. 動態組裝按鈕清單
+        buttons = []
+        for cat in display_cats:
+            buttons.append({
+                "type": "button",
+                "action": {"type": "message", "label": f"🍚 {cat}", "text": f"分類:{cat}"},
+                "style": "primary", "color": "#4b7a47", "margin": "sm"
+            })
+        
+        # 永遠保留「新增分類」按鈕
         buttons.append({
             "type": "button",
-            "action": {"type": "message", "label": f"🍚 {cat}", "text": f"分類:{cat}"},
-            "style": "primary", "color": "#4b7a47", "margin": "sm"
+            "action": {"type": "message", "label": "➕ 新增其他分類", "text": "動作:自定義分類"},
+            "style": "secondary", "margin": "sm"
         })
     
-    # 永遠保留「新增分類」按鈕
-    buttons.append({
-        "type": "button",
-        "action": {"type": "message", "label": "➕ 新增其他分類", "text": "動作:自定義分類"},
-        "style": "secondary", "margin": "sm"
-    })
-
-    # 3. 組裝完整的 Flex Message
-    category_flex = {
-        "type": "bubble",
-        "header": {
-            "type": "box", "layout": "vertical", "contents": [
-                {"type": "text", "text": "📍 位置已記錄", "color": "#ffffff", "weight": "bold", "size": "sm"}
-            ], "backgroundColor": "#4b7a47"
-        },
-        "body": {
-            "type": "box", "layout": "vertical", "contents": [
-                {"type": "text", "text": title, "weight": "bold", "size": "xl"},
-                {"type": "text", "text": "請選擇分類（包含妳新增過的）：", "size": "sm", "color": "#888888", "margin": "md"},
-                {"type": "box", "layout": "vertical", "margin": "lg", "contents": buttons}
-            ]
+        # 3. 組裝完整的 Flex Message
+        category_flex = {
+            "type": "bubble",
+            "header": {
+                "type": "box", "layout": "vertical", "contents": [
+                    {"type": "text", "text": "📍 位置已記錄", "color": "#ffffff", "weight": "bold", "size": "sm"}
+                ], "backgroundColor": "#4b7a47"
+            },
+            "body": {
+                "type": "box", "layout": "vertical", "contents": [
+                    {"type": "text", "text": title, "weight": "bold", "size": "xl"},
+                    {"type": "text", "text": "請選擇分類（建議最多5個分類）：", "size": "sm", "color": "#888888", "margin": "md"},
+                    {"type": "box", "layout": "vertical", "margin": "lg", "contents": buttons}
+                ]
+            }
         }
-    }
-    line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="請選擇分類", contents=category_flex))
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="請選擇分類", contents=category_flex))
+    
+    if current_step == "awaiting_user_location":
+        user_lat = event.message.latitude
+        user_lon = event.message.longitude
+        
+        # 1. 從資料庫撈出該使用者的「所有」餐廳
+        res = supabase.table("restaurants").select("*").eq("user_id", user_id).execute()
+        all_restaurants = res.data
+        
+        # 2. 過濾出一公里內的店家
+        nearby_shops = []
+        for shop in all_restaurants:
+            dist = get_distance(user_lat, user_lon, shop['lat'], shop['lon'])
+            if dist <= 1.0: # 1.0 公里
+                shop['dist'] = round(dist, 2) # 順便記錄距離
+                nearby_shops.append(shop)
+        
+        # 3. 處理結果
+        if not nearby_shops:
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="哎呀！妳附近一公里內好像還沒有存過任何餐廳耶。快去『新增餐廳』吧！")
+            )
+        else:
+            # 隨機挑選最多 5 家 (資工系常用 random.sample)
+            import random
+            display_count = min(len(nearby_shops), 5)
+            selected_shops = random.sample(nearby_shops, display_count)
+            
+            # [ 下一步：我們要用 Flex Message 把它畫成精美的推薦卡 ]
+            # 先用簡單文字測試
+            reply_text = f"幫妳找到了 {len(nearby_shops)} 家店，這 {display_count} 家推薦給妳：\n"
+            for s in selected_shops:
+                reply_text += f"\n📍 {s['name']} ({s['dist']}km)\n分類：{s['category']}"
+            
+            # 結束流程，狀態跳回 idle
+            supabase.table("user_status").update({"current_step": "idle"}).eq("user_id", user_id).execute()
+            
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
 
 if __name__ == "__main__":
     app.run()
