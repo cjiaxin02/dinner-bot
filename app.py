@@ -111,31 +111,26 @@ def handle_message(event):
         bubbles = []
         # 前 10 筆正常顯示
         for s in shops[:10]:
-            # --- 1. 核心修正：確保 tag_list 無論如何都會被定義 ---
-            tags_str = s.get('tags') or ""  # 避免 NoneType 報錯
-            tag_list = tags_str.split() if tags_str else [] 
-            
-            # 建立標籤組的內容清單
-            # --- 關鍵修正：在這裡定義 tag_list ---
-            # 從當前這筆餐廳 s 取得 'tags' 欄位，若為空則給空字串
             raw_tags = s.get('tags') or "" 
-            # 將 "#標籤1 #標籤2" 切割成 ['#標籤1', '#標籤2']
             tag_list = raw_tags.split() 
-
+        
             tag_contents = []
-            for tag in tag_list[:3]:  # 取前三個標籤
+            for tag in tag_list[:3]: 
                 tag_contents.append({
                     "type": "text",
-                    "text": tag,
+                    "text": f"#{tag}", # 加上 # 號比較好讀
                     "size": "xxs",
-                    "color": "#ffffff",
-                    "backgroundColor": "#7ba376",
+                    "color": "#4b7a47", # 調整顏色對比
+                    "backgroundColor": "#E8F5E9", # 淺綠色背景
                     "margin": "xs",
                     "paddingAll": "2px",
-                    "flex": 0
+                    "flex": 0  # 這裡 flex: 0 是對的，但外層要 wrap
                 })
-
-            # --- 2. 組裝卡片 ---
+        
+            # 如果沒有標籤，放一個空的填位，避免 box 報錯
+            if not tag_contents:
+                tag_contents.append({"type": "filler"})
+        
             bubbles.append({
                 "type": "bubble",
                 "size": "micro",
@@ -143,14 +138,14 @@ def handle_message(event):
                     "type": "box", 
                     "layout": "vertical", 
                     "contents": [
-                        {"type": "text", "text": s['name'], "weight": "bold", "size": "md"},
-                        {"type": "text", "text": f"📍 {s['category']}", "size": "xs", "color": "#4b7a47", "margin": "xs"},
-                        # 插入標籤容器
+                        {"type": "text", "text": s['name'], "weight": "bold", "size": "sm", "wrap": True},
+                        {"type": "text", "text": f"📍 {s['category']}", "size": "xxs", "color": "#4b7a47", "margin": "xs"},
                         {
                             "type": "box",
                             "layout": "horizontal",
                             "margin": "md",
-                            "contents": tag_contents  # 這裡會用到上面的 tag_contents
+                            "contents": tag_contents,
+                            "wrap": True  # <--- 關鍵：一定要加這行標籤才會換行顯示
                         },
                         {"type": "text", "text": s['address'] or "無地址資訊", "size": "xxs", "color": "#aaaaaa", "wrap": True, "margin": "md"}
                     ]
@@ -391,11 +386,20 @@ def handle_location(event):
                 # 動態產生標籤的 JSON 組件
                 for tag in tag_list:
                     tag_contents.append({
-                        "type": "box", "layout": "horizontal", "contents": [
+                        "type": "box", 
+                        "layout": "horizontal", 
+                        "contents": [
                             {"type": "text", "text": f"#{tag}", "size": "xxs", "color": "#4b7a47"}
                         ],
-                        "backgroundColor": "#E8F5E9", "paddingAll": "2px", "cornerRadius": "4px", "margin": "xs"
+                        "backgroundColor": "#E8F5E9", 
+                        "paddingAll": "2px", 
+                        "cornerRadius": "4px", 
+                        "margin": "xs",
+                        "flex": 0 # 確保標籤寬度隨文字長度縮放
                     })
+                # 如果沒有標籤，加入一個隱形的 filler 避免空的 contents 導致 Error
+                if not tag_contents:
+                    tag_contents = [{"type": "filler"}]
 
                 # 2. 組裝單個餐廳的卡片 (Bubble)
                 bubble = {
@@ -403,10 +407,15 @@ def handle_location(event):
                   "size": "micro", # 使用微型卡片，這樣一次可以滑動看 5 家
                   "body": {
                     "type": "box", "layout": "vertical", "contents": [
-                      {"type": "text", "text": s['name'], "weight": "bold", "size": "sm", "wrap": True},
-                      {"type": "text", "text": f"{s['dist']} km | {s['category']}", "size": "xxs", "color": "#888888", "margin": "xs"},
-                      # 這裡放入剛才動態生成的標籤盒
-                      {"type": "box", "layout": "horizontal", "contents": tag_contents, "margin": "md", "flex": 1, "wrap": True}
+                        {"type": "text", "text": s['name'], "weight": "bold", "size": "sm", "wrap": True},
+                        {"type": "text", "text": f"{s['dist']} km | {s['category']}", "size": "xxs", "color": "#888888", "margin": "xs"},
+                        {
+                            "type": "box", 
+                            "layout": "horizontal", 
+                            "contents": tag_contents, 
+                            "margin": "md", 
+                            "wrap": True # <--- 關鍵：讓多個小標籤可以自動排版
+                        }
                     ]
                   },
                   "footer": {
