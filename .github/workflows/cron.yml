@@ -20,7 +20,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install line-bot-sdk
+          pip install line-bot-sdk supabase
 
       - name: Run script
         env:
