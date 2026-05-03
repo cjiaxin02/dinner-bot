@@ -6,6 +6,7 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage
 from supabase import create_client
 from linebot.models import LocationMessage, LocationSendMessage
 from linebot.models import FlexSendMessage
+from datetime import datetime, timedelta
 import math # 記得在檔案最上方加上這行
 
 def get_distance(lat1, lon1, lat2, lon2):
@@ -306,6 +307,60 @@ def handle_location(event):
             # 3. 封裝成 Carousel (輪播介面)
             carousel = {"type": "carousel", "contents": bubbles}
             line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="為妳挑選的餐廳", contents=carousel))
+
+@handler.add(PostbackEvent)
+def handle_postback(event):
+    user_id = event.source.user_id
+    # 解析傳回來的資料：action=eat&res_id=123&res_name=店名
+    data = dict(parse_qsl(event.postback.data))
+    
+    if data.get("action") == "eat":
+        res_id = data.get("res_id")
+        res_name = data.get("res_name")
+        
+        # 1. 檢查這家餐廳最近一次的用餐紀錄
+        last_meal = supabase.table("meals") \
+            .select("created_at") \
+            .eq("restaurant_id", res_id) \
+            .eq("user_id", user_id) \
+            .order("created_at", desc=True) \
+            .limit(1) \
+            .execute()
+        
+        can_eat = True
+        if last_meal.data:
+            # 轉換時間格式 (Supabase 回傳的是 ISO 格式字串)
+            last_time = datetime.fromisoformat(last_meal.data[0]['created_at'].replace('Z', '+00:00'))
+            now = datetime.now(last_time.tzinfo)
+            
+            # 檢查是否過了 4.5 小時
+            if now - last_time < timedelta(hours=4.5):
+                can_eat = False
+                wait_time = timedelta(hours=4.5) - (now - last_time)
+                minutes = int(wait_time.total_seconds() // 60)
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text=f"🚫 這家店剛吃過喔！冷卻中...\n還要再等 {minutes} 分鐘才能再次選擇。")
+                )
+        
+        if can_eat:
+            # 2. 記錄這次用餐
+            supabase.table("meals").insert({
+                "restaurant_id": res_id,
+                "user_id": user_id
+            }).execute()
+            
+            # 3. 抓取餐廳座標來生成 Google Maps 連結
+            res_info = supabase.table("restaurants").select("lat, lon").eq("id", res_id).single().execute().data
+            maps_url = f"https://www.google.com/maps/search/?api=1&query={res_info['lat']},{res_info['lon']}"
+            
+            line_bot_api.reply_message(
+                event.reply_token,
+                [
+                    TextSendMessage(text=f"🍴 出發前往『{res_name}』！\n這家店已經為妳上鎖 4.5 小時囉。"),
+                    TextSendMessage(text=f"導航連結：{maps_url}")
+                ]
+            )
 
 if __name__ == "__main__":
     app.run()
