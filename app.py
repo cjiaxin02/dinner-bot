@@ -130,7 +130,7 @@ def handle_message(event):
                 "body": {
                     "type": "box", "layout": "vertical", "contents": [
                         {"type": "text", "text": s['name'], "weight": "bold", "size": "md"},
-                        {"type": "text", "text": f"📍 {s['category']}", "size": "xs", "color": "#4b7a47"}
+                        {"type": "text", "text": f"📍 {s['category']}", "size": "xs", "color": "#4b7a47"},
                         {
                             "type": "box",
                             "layout": "horizontal",
