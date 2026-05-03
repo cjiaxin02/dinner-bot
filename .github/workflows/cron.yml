@@ -1,0 +1,30 @@
+name: Meal Time Reminder
+
+on:
+  schedule:
+    # UTC 04:00 是台北 12:00；UTC 10:00 是台北 18:00
+    - cron: '0 4,10 * * *'
+  workflow_dispatch: # 讓妳可以手動按按鈕測試
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install line-bot-sdk
+
+      - name: Run script
+        env:
+          # 這裡對應腳本裡的 os.environ
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          MY_LINE_USER_ID: ${{ secrets.MY_LINE_USER_ID }}
+        run: python clock_in.py
