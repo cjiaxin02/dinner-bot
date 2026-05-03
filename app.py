@@ -61,7 +61,7 @@ def handle_message(event):
     if user_text == "選單" or user_text == "取消":
         # 強制將狀態重置為 idle
         supabase.table("user_status").update({"current_step": "idle"}).eq("user_id", user_id).execute()
-        
+
         flex_menu = {
           "type": "bubble",
           "header": {
@@ -103,7 +103,7 @@ def handle_message(event):
         query = supabase.table("restaurants").select("*").eq("user_id", user_id)
         if "分類:" in user_text:
             query = query.eq("category", parts[2])
-        
+
         # 抓取 11 筆，若有第 11 筆代表有「下一頁」
         res = query.order("created_at", desc=True).range(offset, offset + 10).execute()
         shops = res.data
@@ -111,6 +111,11 @@ def handle_message(event):
         bubbles = []
         # 前 10 筆正常顯示
         for s in shops[:10]:
+            # --- 1. 核心修正：確保 tag_list 無論如何都會被定義 ---
+            tags_str = s.get('tags') or ""  # 避免 NoneType 報錯
+            tag_list = tags_str.split() if tags_str else [] 
+            
+            # 建立標籤組的內容清單
             # --- 關鍵修正：在這裡定義 tag_list ---
             # 從當前這筆餐廳 s 取得 'tags' 欄位，若為空則給空字串
             raw_tags = s.get('tags') or "" 
@@ -118,6 +123,7 @@ def handle_message(event):
             tag_list = raw_tags.split() 
 
             tag_contents = []
+            for tag in tag_list[:3]:  # 取前三個標籤
             for tag in tag_list[:3]: 
                 tag_contents.append({
                     "type": "text",
@@ -182,7 +188,7 @@ def handle_message(event):
         if user_text == "新增餐廳":
             # 將狀態切換為 awaiting_location
             supabase.table("user_status").update({"current_step": "awaiting_location"}).eq("user_id", user_id).execute()
-            
+
             line_bot_api.reply_message(
                 event.reply_token,
                 TextSendMessage(text="太棒了！請點選左下角「＋」號，選擇「傳送位置資訊」，告訴我這家店在哪裡～")
@@ -191,7 +197,7 @@ def handle_message(event):
         elif user_text == "肚子餓了":
             # 1. 將狀態切換為 awaiting_user_location
             supabase.table("user_status").update({"current_step": "awaiting_user_location"}).eq("user_id", user_id).execute()
-            
+
             # 2. 提示使用者傳送「現在」的位置
             line_bot_api.reply_message(
                 event.reply_token,
@@ -202,18 +208,18 @@ def handle_message(event):
             # 1. 撈取該用戶現有的所有不重複分類
             res = supabase.table("restaurants").select("category").eq("user_id", user_id).execute()
             categories = list(set([r['category'] for r in res.data if r['category']]))
-            
+
             # 2. 組裝篩選按鈕 (Flex Message)
             filter_buttons = [
                 {"type": "button", "action": {"type": "message", "label": "📋 顯示全部", "text": "清單:全部"}, "style": "primary", "color": "#4b7a47"}
             ]
-            
+
             # 動態加入妳有的分類
             for cat in categories[:5]: # 取前五個
                 filter_buttons.append({
                     "type": "button", "action": {"type": "message", "label": f"🔍 {cat}", "text": f"清單:分類:{cat}"}, "style": "secondary"
                 })
-    
+
             filter_flex = {
                 "type": "bubble",
                 "body": {
@@ -226,7 +232,7 @@ def handle_message(event):
             }
             line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="查看清單", contents=filter_flex))
             return
-        
+
     elif current_step == "awaiting_category":
         if user_text == "動作:自定義分類":
             # 狀態維持在等待分類，但提示使用者直接輸入文字
@@ -235,16 +241,16 @@ def handle_message(event):
                 TextSendMessage(text="請直接輸入妳想設定的大分類名稱（例如：主食、甜點、飲料）：")
             )
             return
-            
+
         elif user_text.startswith("分類:") or user_status.get("current_step") == "awaiting_category":
             # 如果是點擊按鈕，去掉前綴；如果是直接輸入，就直接用 user_text
             category = user_text.split(":")[1] if user_text.startswith("分類:") else user_text
-            
+
             supabase.table("user_status").update({
                 "current_step": "awaiting_tags",
                 "temp_category": category
             }).eq("user_id", user_id).execute()
-            
+
             line_bot_api.reply_message(
                 event.reply_token,
                 TextSendMessage(text=f"已設定為【{category}】！\n最後一步：請輸入「小標籤」，若不填請輸入「無」。")
@@ -254,7 +260,7 @@ def handle_message(event):
     elif current_step == "awaiting_tags":
         tags = user_text if user_text != "無" else ""
         user_data = supabase.table("user_status").select("*").eq("user_id", user_id).single().execute().data
-        
+
         # 正式入庫，這次加上了 user_id
         supabase.table("restaurants").insert({
             "user_id": user_id,  # <--- 重要：記錄是誰存的
@@ -265,72 +271,18 @@ def handle_message(event):
             "lon": user_data["temp_lon"],
             "address": user_data["temp_address"]
         }).execute()
-        
+
         # 3. 歸零狀態，清空暫存區
         supabase.table("user_status").update({
             "current_step": "idle",
             "temp_name": None, "temp_lat": None, "temp_lon": None, 
             "temp_address": None, "temp_category": None
         }).eq("user_id", user_id).execute()
-        
+
         line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage(text=f"🎉 萬歲！『{user_data['temp_name']}』已成功存入妳的美食資料庫！")
         )
-    # --- 在 handle_message 裡面新增這個分流 ---
-
-    elif current_step == "awaiting_name":
-        # 如果使用者輸入 ok，就維持原來的名字 (temp_name 已經在上一部存好了)
-        if user_text.lower() != "ok":
-            supabase.table("user_status").update({
-                "temp_name": user_text
-            }).eq("user_id", user_id).execute()
-            final_name = user_text
-        else:
-            final_name = user_status.get("temp_name")
-
-        # 更新狀態為等待分類
-        supabase.table("user_status").update({
-            "current_step": "awaiting_category"
-        }).eq("user_id", user_id).execute()
-
-        # --- 接下來這段直接搬妳原本 handle_location 裡面的「噴出大分類圖卡」邏輯 ---
-        # 1. 撈取現有分類
-        existing_cats_res = supabase.table("restaurants").select("category").eq("user_id", user_id).execute()
-        user_categories = list(set([r['category'] for r in existing_cats_res.data if r['category']]))
-        display_cats = user_categories[:5] 
-
-        # 2. 組裝按鈕
-        buttons = []
-        for cat in display_cats:
-            buttons.append({
-                "type": "button",
-                "action": {"type": "message", "label": f"🍚 {cat}", "text": f"分類:{cat}"},
-                "style": "primary", "color": "#4b7a47", "margin": "sm"
-            })
-        buttons.append({
-            "type": "button",
-            "action": {"type": "message", "label": "➕ 新增其他分類", "text": "動作:自定義分類"},
-            "style": "secondary", "margin": "sm"
-        })
-
-        # 3. 組裝 Flex Message
-        category_flex = {
-            "type": "bubble",
-            "header": {
-                "type": "box", "layout": "vertical", "contents": [
-                    {"type": "text", "text": f"📍 店名：{final_name}", "color": "#ffffff", "weight": "bold", "size": "sm"}
-                ], "backgroundColor": "#4b7a47"
-            },
-            "body": {
-                "type": "box", "layout": "vertical", "contents": [
-                    {"type": "text", "text": "請選擇分類：", "size": "sm", "color": "#888888", "margin": "md"},
-                    {"type": "box", "layout": "vertical", "margin": "lg", "contents": buttons}
-                ]
-            }
-        }
-        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="請選擇分類", contents=category_flex))
-        return
 
 # --- 4. 處理「位置訊息」 ( handle_location ) ---
 @handler.add(MessageEvent, message=LocationMessage)
@@ -344,7 +296,7 @@ def handle_location(event):
         lat = event.message.latitude
         lon = event.message.longitude
         addr = event.message.address
-        default_name = event.message.title if event.message.title else "這家神祕餐廳"
+        title = event.message.title if event.message.title else "這家神祕餐廳"
 
         # 1. 更新資料庫暫存區，並跳轉至下一步驟
         supabase.table("user_status").update({
@@ -352,13 +304,8 @@ def handle_location(event):
             "temp_lat": lat,
             "temp_lon": lon,
             "temp_address": addr,
-            "temp_name": default_name
+            "temp_name": title
         }).eq("user_id", user_id).execute()
-
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=f"收到位置了！這家店要叫什麼名字呢？\n(直接輸入新名字，或回覆「ok」沿用『{default_name}』)")
-        )
 
         # 2. 噴出大分類選擇圖卡
         # 1. 從餐廳表撈出該用戶存過、不重複的前幾個大分類
@@ -366,13 +313,13 @@ def handle_location(event):
             .select("category") \
             .eq("user_id", user_id) \
             .execute()
-        
+
         # 使用 set 取得不重複的分類，並過濾掉 None
         user_categories = list(set([r['category'] for r in existing_cats_res.data if r['category']]))
         # 只取前 5 個預設+妳新增過的，留位置給「新增分類」按鈕
         display_cats = user_categories[:5] 
-        
-    
+
+
         # 2. 動態組裝按鈕清單
         buttons = []
         for cat in display_cats:
@@ -381,14 +328,14 @@ def handle_location(event):
                 "action": {"type": "message", "label": f"🍚 {cat}", "text": f"分類:{cat}"},
                 "style": "primary", "color": "#4b7a47", "margin": "sm"
             })
-        
+
         # 永遠保留「新增分類」按鈕
         buttons.append({
             "type": "button",
             "action": {"type": "message", "label": "➕ 新增其他分類", "text": "動作:自定義分類"},
             "style": "secondary", "margin": "sm"
         })
-    
+
         # 3. 組裝完整的 Flex Message
         category_flex = {
             "type": "bubble",
@@ -406,15 +353,15 @@ def handle_location(event):
             }
         }
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="請選擇分類", contents=category_flex))
-    
+
     if current_step == "awaiting_user_location":
         user_lat = event.message.latitude
         user_lon = event.message.longitude
-        
+
         # 1. 從資料庫撈出該使用者的「所有」餐廳
         res = supabase.table("restaurants").select("*").eq("user_id", user_id).execute()
         all_restaurants = res.data
-        
+
         # 2. 過濾出一公里內的店家
         nearby_shops = []
         for shop in all_restaurants:
@@ -422,7 +369,7 @@ def handle_location(event):
             if dist <= 1.0: # 1.0 公里
                 shop['dist'] = round(dist, 2) # 順便記錄距離
                 nearby_shops.append(shop)
-        
+
         # 3. 處理結果
         if not nearby_shops:
             line_bot_api.reply_message(
@@ -434,14 +381,14 @@ def handle_location(event):
             import random
             display_count = min(len(nearby_shops), 5)
             selected_shops = random.sample(nearby_shops, display_count)
-            
+
             # [ 下一步：我們要用 Flex Message 把它畫成精美的推薦卡 ]
             bubbles = []
             for s in selected_shops:
                 # 1. 處理標籤邏輯：將字串切成陣列
                 tag_list = s['tags'].split() if s['tags'] else []
                 tag_contents = []
-                
+
                 # 動態產生標籤的 JSON 組件
                 for tag in tag_list:
                     tag_contents.append({
@@ -450,7 +397,7 @@ def handle_location(event):
                         ],
                         "backgroundColor": "#E8F5E9", "paddingAll": "2px", "cornerRadius": "4px", "margin": "xs"
                     })
-    
+
                 # 2. 組裝單個餐廳的卡片 (Bubble)
                 bubble = {
                   "type": "bubble",
@@ -477,7 +424,7 @@ def handle_location(event):
                   }
                 }
                 bubbles.append(bubble)
-    
+
             # 3. 封裝成 Carousel (輪播介面)
             carousel = {"type": "carousel", "contents": bubbles}
             line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="為妳挑選的餐廳", contents=carousel))
@@ -487,11 +434,11 @@ def handle_postback(event):
     user_id = event.source.user_id
     # 解析傳回來的資料：action=eat&res_id=123&res_name=店名
     data = dict(parse_qsl(event.postback.data))
-    
+
     if data.get("action") == "eat":
         res_id = data.get("res_id")
         res_name = data.get("res_name")
-        
+
         # 1. 檢查這家餐廳最近一次的用餐紀錄
         last_meal = supabase.table("meals") \
             .select("created_at") \
@@ -500,13 +447,13 @@ def handle_postback(event):
             .order("created_at", desc=True) \
             .limit(1) \
             .execute()
-        
+
         can_eat = True
         if last_meal.data:
             # 轉換時間格式 (Supabase 回傳的是 ISO 格式字串)
             last_time = datetime.fromisoformat(last_meal.data[0]['created_at'].replace('Z', '+00:00'))
             now = datetime.now(last_time.tzinfo)
-            
+
             # 檢查是否過了 4.5 小時
             if now - last_time < timedelta(hours=4.5):
                 can_eat = False
@@ -516,18 +463,18 @@ def handle_postback(event):
                     event.reply_token,
                     TextSendMessage(text=f"🚫 這家店剛吃過喔！冷卻中...\n還要再等 {minutes} 分鐘才能再次選擇。")
                 )
-        
+
         if can_eat:
             # 2. 記錄這次用餐
             supabase.table("meals").insert({
                 "restaurant_id": res_id,
                 "user_id": user_id
             }).execute()
-            
+
             # 3. 抓取餐廳座標來生成 Google Maps 連結
             res_info = supabase.table("restaurants").select("lat, lon").eq("id", res_id).single().execute().data
             maps_url = f"https://www.google.com/maps/search/?api=1&query={res_info['lat']},{res_info['lon']}"
-            
+
             line_bot_api.reply_message(
                 event.reply_token,
                 [
@@ -559,7 +506,7 @@ def handle_postback(event):
         # 真正執行刪除動作
         res_id = data.get("res_id")
         supabase.table("restaurants").delete().eq("id", res_id).eq("user_id", user_id).execute()
-        
+
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="🗑️ 已成功將該餐廳從清單中移除。"))
 
 from linebot.models import UnfollowEvent
@@ -567,17 +514,17 @@ from linebot.models import UnfollowEvent
 @handler.add(UnfollowEvent)
 def handle_unfollow(event):
     user_id = event.source.user_id
-    
+
     # 1. 刪除該使用者的狀態紀錄
     supabase.table("user_status").delete().eq("user_id", user_id).execute()
-    
+
     # 2. 刪除該使用者的餐廳清單 (選選：看妳是否要幫她保留資料)
     # 如果想徹底清除，就執行這行：
     supabase.table("restaurants").delete().eq("user_id", user_id).execute()
-    
+
     # 3. 刪除用餐紀錄
     supabase.table("meals").delete().eq("user_id", user_id).execute()
-    
+
     print(f"User {user_id} has unfollowed. Data cleared.")
 
 if __name__ == "__main__":
