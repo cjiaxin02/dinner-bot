@@ -261,15 +261,51 @@ def handle_location(event):
             selected_shops = random.sample(nearby_shops, display_count)
             
             # [ 下一步：我們要用 Flex Message 把它畫成精美的推薦卡 ]
-            # 先用簡單文字測試
-            reply_text = f"幫妳找到了 {len(nearby_shops)} 家店，這 {display_count} 家推薦給妳：\n"
+            bubbles = []
             for s in selected_shops:
-                reply_text += f"\n📍 {s['name']} ({s['dist']}km)\n分類：{s['category']}"
-            
-            # 結束流程，狀態跳回 idle
-            supabase.table("user_status").update({"current_step": "idle"}).eq("user_id", user_id).execute()
-            
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
+                # 1. 處理標籤邏輯：將字串切成陣列
+                tag_list = s['tags'].split() if s['tags'] else []
+                tag_contents = []
+                
+                # 動態產生標籤的 JSON 組件
+                for tag in tag_list:
+                    tag_contents.append({
+                        "type": "box", "layout": "horizontal", "contents": [
+                            {"type": "text", "text": f"#{tag}", "size": "xxs", "color": "#4b7a47"}
+                        ],
+                        "backgroundColor": "#E8F5E9", "paddingAll": "2px", "cornerRadius": "4px", "margin": "xs"
+                    })
+    
+                # 2. 組裝單個餐廳的卡片 (Bubble)
+                bubble = {
+                  "type": "bubble",
+                  "size": "micro", # 使用微型卡片，這樣一次可以滑動看 5 家
+                  "body": {
+                    "type": "box", "layout": "vertical", "contents": [
+                      {"type": "text", "text": s['name'], "weight": "bold", "size": "sm", "wrap": True},
+                      {"type": "text", "text": f"{s['dist']} km | {s['category']}", "size": "xxs", "color": "#888888", "margin": "xs"},
+                      # 這裡放入剛才動態生成的標籤盒
+                      {"type": "box", "layout": "horizontal", "contents": tag_contents, "margin": "md", "flex": 1, "wrap": True}
+                    ]
+                  },
+                  "footer": {
+                    "type": "box", "layout": "vertical", "contents": [
+                      {
+                        "type": "button", "style": "primary", "color": "#4b7a47", "height": "sm",
+                        "action": {
+                          "type": "postback", 
+                          "label": "前往用餐", 
+                          "data": f"action=eat&res_id={s['id']}&res_name={s['name']}"
+                        }
+                      }
+                    ]
+                  }
+                }
+                bubbles.append(bubble)
+    
+            # 3. 封裝成 Carousel (輪播介面)
+            carousel = {"type": "carousel", "contents": bubbles}
+            line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="為妳挑選的餐廳", contents=carousel))
 
 if __name__ == "__main__":
     app.run()
