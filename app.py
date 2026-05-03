@@ -472,5 +472,24 @@ def handle_postback(event):
         supabase.table("restaurants").delete().eq("id", res_id).eq("user_id", user_id).execute()
         
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="🗑️ 已成功將該餐廳從清單中移除。"))
+
+from linebot.models import UnfollowEvent
+
+@handler.add(UnfollowEvent)
+def handle_unfollow(event):
+    user_id = event.source.user_id
+    
+    # 1. 刪除該使用者的狀態紀錄
+    supabase.table("user_status").delete().eq("user_id", user_id).execute()
+    
+    # 2. 刪除該使用者的餐廳清單 (選選：看妳是否要幫她保留資料)
+    # 如果想徹底清除，就執行這行：
+    supabase.table("restaurants").delete().eq("user_id", user_id).execute()
+    
+    # 3. 刪除用餐紀錄
+    supabase.table("meals").delete().eq("user_id", user_id).execute()
+    
+    print(f"User {user_id} has unfollowed. Data cleared.")
+
 if __name__ == "__main__":
     app.run()
