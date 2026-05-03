@@ -114,7 +114,88 @@ def handle_message(event):
                 TextSendMessage(text="肚子餓了嗎？請傳送妳『現在的位置資訊』，我幫妳找找方圓 1 公里內好吃的！")
             )
             return
+        elif user_text == "我的清單":
+            # 1. 撈取該用戶現有的所有不重複分類
+            res = supabase.table("restaurants").select("category").eq("user_id", user_id).execute()
+            categories = list(set([r['category'] for r in res.data if r['category']]))
+            
+            # 2. 組裝篩選按鈕 (Flex Message)
+            filter_buttons = [
+                {"type": "button", "action": {"type": "message", "label": "📋 顯示全部", "text": "清單:全部"}, "style": "primary", "color": "#4b7a47"}
+            ]
+            
+            # 動態加入妳有的分類
+            for cat in categories[:3]: # 取前三個
+                filter_buttons.append({
+                    "type": "button", "action": {"type": "message", "label": f"🔍 {cat}", "text": f"清單:分類:{cat}"}, "style": "secondary"
+                })
+    
+            filter_flex = {
+                "type": "bubble",
+                "body": {
+                    "type": "box", "layout": "vertical", "spacing": "md", "contents": [
+                        {"type": "text", "text": "📒 我的美食帳本", "weight": "bold", "size": "xl"},
+                        {"type": "text", "text": "請選擇篩選方式：", "size": "sm", "color": "#888888"},
+                        {"type": "box", "layout": "vertical", "spacing": "sm", "contents": filter_buttons}
+                    ]
+                }
+            }
+            line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="查看清單", contents=filter_flex))
+            return
+    elif user_text.startswith("清單:"):
+        # 解析分頁參數，例如 "清單:全部:10" 代表從第 10 筆開始抓
+        parts = user_text.split(":")
+        offset = int(parts[-1]) if parts[-1].isdigit() else 0
+        base_cmd = "清單:全部" if "全部" in user_text else f"清單:分類:{parts[2]}"
 
+        query = supabase.table("restaurants").select("*").eq("user_id", user_id)
+        if "分類:" in user_text:
+            query = query.eq("category", parts[2])
+        
+        # 抓取 11 筆，若有第 11 筆代表有「下一頁」
+        res = query.order("created_at", desc=True).range(offset, offset + 10).execute()
+        shops = res.data
+
+        bubbles = []
+        # 前 10 筆正常顯示
+        for s in shops[:10]:
+            bubbles.append({
+                "type": "bubble",
+                "size": "micro",
+                "body": {
+                    "type": "box", "layout": "vertical", "contents": [
+                        {"type": "text", "text": s['name'], "weight": "bold", "size": "md"},
+                        {"type": "text", "text": f"📍 {s['category']}", "size": "xs", "color": "#4b7a47"}
+                    ]
+                },
+                "footer": {
+                    "type": "box", "layout": "vertical", "spacing": "sm", "contents": [
+                        {"type": "button", "style": "link", "height": "sm", "action": {"type": "uri", "label": "導航", "uri": f"https://www.google.com/maps/search/?api=1&query={s['lat']},{s['lon']}"}},
+                        # 刪除按鈕：觸發 Postback 避免誤觸
+                        {"type": "button", "style": "link", "height": "sm", "color": "#FF5555", "action": {"type": "postback", "label": "🗑️ 刪除", "data": f"action=confirm_del&res_id={s['id']}&res_name={s['name']}"}}
+                    ]
+                }
+            })
+
+        # 如果有第 11 筆，加入「查看更多」卡片
+        if len(shops) > 10:
+            bubbles.append({
+                "type": "bubble",
+                "size": "micro",
+                "body": {
+                    "type": "box", "layout": "vertical", "contents": [
+                        {"type": "text", "text": "還有更多餐廳...", "align": "center", "gravity": "center"}
+                    ]
+                },
+                "footer": {
+                    "type": "box", "layout": "vertical", "contents": [
+                        {"type": "button", "style": "primary", "color": "#4b7a47", "action": {"type": "message", "label": "下一頁", "text": f"{base_cmd}:{offset + 10}"}}
+                    ]
+                }
+            })
+
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="餐廳清單", contents={"type": "carousel", "contents": bubbles}))
+        
     elif current_step == "awaiting_category":
         if user_text == "動作:自定義分類":
             # 狀態維持在等待分類，但提示使用者直接輸入文字
@@ -364,6 +445,31 @@ def handle_postback(event):
                     TextSendMessage(text=f"導航連結：{maps_url}")
                 ]
             )
+    # 在 handle_postback 裡面加入這兩個 action 判斷
+    elif data.get("action") == "confirm_del":
+        # 噴出確認視窗，避免手滑
+        confirm_flex = {
+            "type": "bubble",
+            "body": {
+                "type": "box", "layout": "vertical", "contents": [
+                    {"type": "text", "text": "確定要刪除嗎？", "weight": "bold", "size": "lg"},
+                    {"type": "text", "text": f"餐廳：{data.get('res_name')}\n刪除後資料將無法找回。", "size": "sm", "color": "#ff0000", "wrap": True, "margin": "md"}
+                ]
+            },
+            "footer": {
+                "type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                    {"type": "button", "style": "primary", "color": "#FF5555", "action": {"type": "postback", "label": "確定刪除", "data": f"action=real_del&res_id={data.get('res_id')}"}},
+                    {"type": "button", "style": "secondary", "action": {"type": "message", "label": "取消", "text": "取消"}}
+                ]
+            }
+        }
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="確認刪除", contents=confirm_flex))
 
+    elif data.get("action") == "real_del":
+        # 真正執行刪除動作
+        res_id = data.get("res_id")
+        supabase.table("restaurants").delete().eq("id", res_id).eq("user_id", user_id).execute()
+        
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="🗑️ 已成功將該餐廳從清單中移除。"))
 if __name__ == "__main__":
     app.run()
