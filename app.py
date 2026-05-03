@@ -216,7 +216,7 @@ def handle_location(event):
             ]
         }
     }
-        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="請選擇分類", contents=category_flex))
+    line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="請選擇分類", contents=category_flex))
 
 if __name__ == "__main__":
     app.run()
