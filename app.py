@@ -277,6 +277,60 @@ def handle_message(event):
             event.reply_token,
             TextSendMessage(text=f"🎉 萬歲！『{user_data['temp_name']}』已成功存入妳的美食資料庫！")
         )
+    # --- 在 handle_message 裡面新增這個分流 ---
+
+    elif current_step == "awaiting_name":
+        # 如果使用者輸入 ok，就維持原來的名字 (temp_name 已經在上一部存好了)
+        if user_text.lower() != "ok":
+            supabase.table("user_status").update({
+                "temp_name": user_text
+            }).eq("user_id", user_id).execute()
+            final_name = user_text
+        else:
+            final_name = user_status.get("temp_name")
+
+        # 更新狀態為等待分類
+        supabase.table("user_status").update({
+            "current_step": "awaiting_category"
+        }).eq("user_id", user_id).execute()
+
+        # --- 接下來這段直接搬妳原本 handle_location 裡面的「噴出大分類圖卡」邏輯 ---
+        # 1. 撈取現有分類
+        existing_cats_res = supabase.table("restaurants").select("category").eq("user_id", user_id).execute()
+        user_categories = list(set([r['category'] for r in existing_cats_res.data if r['category']]))
+        display_cats = user_categories[:5] 
+
+        # 2. 組裝按鈕
+        buttons = []
+        for cat in display_cats:
+            buttons.append({
+                "type": "button",
+                "action": {"type": "message", "label": f"🍚 {cat}", "text": f"分類:{cat}"},
+                "style": "primary", "color": "#4b7a47", "margin": "sm"
+            })
+        buttons.append({
+            "type": "button",
+            "action": {"type": "message", "label": "➕ 新增其他分類", "text": "動作:自定義分類"},
+            "style": "secondary", "margin": "sm"
+        })
+
+        # 3. 組裝 Flex Message
+        category_flex = {
+            "type": "bubble",
+            "header": {
+                "type": "box", "layout": "vertical", "contents": [
+                    {"type": "text", "text": f"📍 店名：{final_name}", "color": "#ffffff", "weight": "bold", "size": "sm"}
+                ], "backgroundColor": "#4b7a47"
+            },
+            "body": {
+                "type": "box", "layout": "vertical", "contents": [
+                    {"type": "text", "text": "請選擇分類：", "size": "sm", "color": "#888888", "margin": "md"},
+                    {"type": "box", "layout": "vertical", "margin": "lg", "contents": buttons}
+                ]
+            }
+        }
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="請選擇分類", contents=category_flex))
+        return
 
 # --- 4. 處理「位置訊息」 ( handle_location ) ---
 @handler.add(MessageEvent, message=LocationMessage)
@@ -290,7 +344,7 @@ def handle_location(event):
         lat = event.message.latitude
         lon = event.message.longitude
         addr = event.message.address
-        title = event.message.title if event.message.title else "這家神祕餐廳"
+        default_name = event.message.title if event.message.title else "這家神祕餐廳"
 
         # 1. 更新資料庫暫存區，並跳轉至下一步驟
         supabase.table("user_status").update({
@@ -298,8 +352,13 @@ def handle_location(event):
             "temp_lat": lat,
             "temp_lon": lon,
             "temp_address": addr,
-            "temp_name": title
+            "temp_name": default_name
         }).eq("user_id", user_id).execute()
+
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=f"收到位置了！這家店要叫什麼名字呢？\n(直接輸入新名字，或回覆「ok」沿用『{default_name}』)")
+        )
 
         # 2. 噴出大分類選擇圖卡
         # 1. 從餐廳表撈出該用戶存過、不重複的前幾個大分類
