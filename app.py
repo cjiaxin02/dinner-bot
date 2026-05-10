@@ -113,28 +113,36 @@ def handle_message(event):
         res = query.order("created_at", desc=True).range(offset, offset + 10).execute()
         shops = res.data
 
-        bubbles = []
-        # 前 10 筆正常顯示
         for s in shops[:10]:
             raw_tags = s.get('tags') or "" 
             tag_list = raw_tags.split() 
         
             tag_contents = []
             for tag in tag_list[:3]: 
+                # ✨ 修正點：背景顏色要加在 box 上，text 放裡面
                 tag_contents.append({
-                    "type": "text",
-                    "text": f"#{tag}", # 加上 # 號比較好讀
-                    "size": "xxs",
-                    "color": "#4b7a47", # 調整顏色對比
-                    "backgroundColor": "#E8F5E9", # 淺綠色背景
-                    "margin": "xs",
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": f"#{tag}",
+                            "size": "xxs",
+                            "color": "#4b7a47",
+                            "align": "center",
+                            "gravity": "center"
+                        }
+                    ],
+                    "backgroundColor": "#E8F5E9",
+                    "cornerRadius": "4px",
                     "paddingAll": "2px",
-                    "flex": 0  # 這裡 flex: 0 是對的，但外層要 wrap
+                    "margin": "xs",
+                    "flex": 0
                 })
         
-            # 如果沒有標籤，放一個空的填位，避免 box 報錯
+            # 如果沒有標籤，放一個透明的 box 填位
             if not tag_contents:
-                tag_contents.append({"type": "filler"})
+                tag_contents.append({"type": "box", "layout": "vertical", "contents": []})
         
             bubbles.append({
                 "type": "bubble",
@@ -150,9 +158,9 @@ def handle_message(event):
                             "layout": "horizontal",
                             "margin": "md",
                             "contents": tag_contents,
-                            "wrap": True  # <--- 關鍵：一定要加這行標籤才會換行顯示
+                            "wrap": True 
                         },
-                        {"type": "text", "text": s['address'] or "無地址資訊", "size": "xxs", "color": "#aaaaaa", "wrap": True, "margin": "md"}
+                        {"type": "text", "text": s.get('address') or "無地址資訊", "size": "xxs", "color": "#aaaaaa", "wrap": True, "margin": "md"}
                     ]
                 },
                 "footer": {
@@ -160,10 +168,9 @@ def handle_message(event):
                     "layout": "vertical", 
                     "contents": [
                         {"type": "button", "style": "link", "height": "sm", "action": {"type": "uri", "label": "導航", "uri": f"https://www.google.com/maps/search/?api=1&query={s['lat']},{s['lon']}"}},
-                        # ✨ 新增的刪除按鈕
                         {
                             "type": "button",
-                            "style": "text", # 使用文字樣式比較不突兀
+                            "style": "text",
                             "height": "sm",
                             "color": "#FF5555",
                             "action": {
@@ -396,15 +403,16 @@ def handle_location(event):
             # [ 下一步：我們要用 Flex Message 把它畫成精美的推薦卡 ]
             bubbles = []
             for s in selected_shops:
-                # 1. 處理標籤邏輯：將字串切成陣列
-                tag_list = s['tags'].split() if s['tags'] else []
+                # 1. 處理標籤邏輯：確保從資料庫抓出來的東西是字串
+                raw_tags = s.get('tags') or "" 
+                tag_list = raw_tags.split() 
                 tag_contents = []
 
-                # 動態產生標籤的 JSON 組件
+                # 動態產生標籤
                 for tag in tag_list[:3]:
                     tag_contents.append({
-                        "type": "box", 
-                        "layout": "horizontal", 
+                        "type": "box",
+                        "layout": "vertical", # 改成 vertical 包 text，最穩定的做法
                         "contents": [
                             {
                                 "type": "text",
@@ -412,47 +420,61 @@ def handle_location(event):
                                 "size": "xxs",
                                 "color": "#4b7a47",
                                 "align": "center",
+                                "gravity": "center"
                             }
                         ],
-                        "backgroundColor": "#E8F5E9", 
-                        "paddingAll": "2px", 
-                        "cornerRadius": "4px", 
+                        "backgroundColor": "#E8F5E9",
+                        "cornerRadius": "4px",
+                        "paddingAll": "2px",
                         "margin": "xs",
-                        "flex": 0 # 確保標籤寬度隨文字長度縮放
+                        "flex": 0
                     })
-                # 如果沒有標籤，加入一個隱形的 filler 避免空的 contents 導致 Error
+
+                # ✨ 關鍵修正：如果沒有標籤，絕對不能用 filler
+                # 改用一個空的 box 佔位，這樣 JSON 結構才不會報錯
                 if not tag_contents:
-                    tag_contents = [{"type": "filler"}]
+                    tag_contents.append({
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": []
+                    })
 
                 # 2. 組裝單個餐廳的卡片 (Bubble)
                 bubble = {
-                  "type": "bubble",
-                  "size": "micro", # 使用微型卡片，這樣一次可以滑動看 5 家
-                  "body": {
-                        "type": "box", "layout": "vertical", "contents": [
-                            {"type": "text", "text": s['name'], "weight": "bold", "size": "sm", "wrap": True},
-                            {"type": "text", "text": f"{s['dist']} km | {s['category']}", "size": "xxs", "color": "#888888", "margin": "xs"},
+                    "type": "bubble",
+                    "size": "micro",
+                    "body": {
+                        "type": "box", 
+                        "layout": "vertical", 
+                        "contents": [
+                            {"type": "text", "text": s.get('name', '未命名'), "weight": "bold", "size": "sm", "wrap": True},
+                            {"type": "text", "text": f"{s.get('dist', 0)} km | {s.get('category', '一般')}", "size": "xxs", "color": "#888888", "margin": "xs"},
                             {
                                 "type": "box", 
                                 "layout": "horizontal", 
-                                "contents": tag_contents, 
+                                "contents": tag_contents, # 這裡的 tag_contents 現在保證是 List
                                 "margin": "md", 
-                                "wrap": True  # 關鍵：允許標籤自動換行
+                                "wrap": True 
                             }
                         ]
                     },
-                  "footer": {
-                    "type": "box", "layout": "vertical", "contents": [
-                      {
-                        "type": "button", "style": "primary", "color": "#4b7a47", "height": "sm",
-                        "action": {
-                          "type": "postback", 
-                          "label": "前往用餐", 
-                          "data": f"action=eat&res_id={s['id']}&res_name={s['name']}"
-                        }
-                      }
-                    ]
-                  }
+                    "footer": {
+                        "type": "box", 
+                        "layout": "vertical", 
+                        "contents": [
+                            {
+                                "type": "button", 
+                                "style": "primary", 
+                                "color": "#4b7a47", 
+                                "height": "sm",
+                                "action": {
+                                    "type": "postback", 
+                                    "label": "前往用餐", 
+                                    "data": f"action=eat&res_id={s['id']}&res_name={s['name']}"
+                                }
+                            }
+                        ]
+                    }
                 }
                 bubbles.append(bubble)
 
