@@ -182,7 +182,7 @@ def handle_message(event):
             })
 
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="餐廳清單", contents={"type": "carousel", "contents": bubbles}))
-            return
+        return
 
     if current_step == "idle":
         if user_text == "新增餐廳":
