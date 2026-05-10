@@ -100,61 +100,42 @@ def handle_message(event):
 
     # B. 根據狀態分流處理對話
     if user_text.startswith("清單:"):
-        # 1. 解析參數
+        # 解析分頁參數，例如 "清單:全部:10" 代表從第 10 筆開始抓
         parts = user_text.split(":")
         offset = int(parts[-1]) if parts[-1].isdigit() else 0
-        # ✨ 修正：防止 IndexError
-        if "分類:" in user_text:
-            category_name = parts[2]
-            base_cmd = f"清單:分類:{category_name}"
-        else:
-            category_name = None
-            base_cmd = "清單:全部"
+        base_cmd = "清單:全部" if "全部" in user_text else f"清單:分類:{parts[2]}"
 
-        # 2. 撈取資料
         query = supabase.table("restaurants").select("*").eq("user_id", user_id)
         if "分類:" in user_text:
             query = query.eq("category", parts[2])
 
+        # 抓取 11 筆，若有第 11 筆代表有「下一頁」
         res = query.order("created_at", desc=True).range(offset, offset + 10).execute()
         shops = res.data
 
-        # ✨ 防錯機制：如果沒資料，要給個回應，不然機器人會已讀不回
-        if not shops:
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="妳的清單裡目前沒有餐廳喔！"))
-            return
-
-        # ✨ 關鍵點：一定要先初始化陣列
-        bubbles = [] 
-        
-        # 3. 跑迴圈產生卡片
+        bubbles = []
+        # 前 10 筆正常顯示
         for s in shops[:10]:
             raw_tags = s.get('tags') or "" 
             tag_list = raw_tags.split() 
-            tag_contents = []
 
+            tag_contents = []
             for tag in tag_list[:3]: 
                 tag_contents.append({
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [{
-                        "type": "text",
-                        "text": f"#{tag}",
-                        "size": "xxs",
-                        "color": "#4b7a47",
-                        "align": "center",
-                        "gravity": "center"
-                    }],
-                    "backgroundColor": "#E8F5E9",
-                    "cornerRadius": "4px",
-                    "paddingAll": "2px",
+                    "type": "text",
+                    "text": f"#{tag}", # 加上 # 號比較好讀
+                    "size": "xxs",
+                    "color": "#4b7a47", # 調整顏色對比
+                    "backgroundColor": "#E8F5E9", # 淺綠色背景
                     "margin": "xs",
-                    "flex": 0
+                    "paddingAll": "2px",
+                    "flex": 0  # 這裡 flex: 0 是對的，但外層要 wrap
                 })
-        
+
+            # 如果沒有標籤，放一個空的填位，避免 box 報錯
             if not tag_contents:
-                tag_contents.append({"type": "box", "layout": "vertical", "contents": []})
-        
+                tag_contents.append({"type": "filler"})
+
             bubbles.append({
                 "type": "bubble",
                 "size": "micro",
@@ -169,32 +150,21 @@ def handle_message(event):
                             "layout": "horizontal",
                             "margin": "md",
                             "contents": tag_contents,
-                            "wrap": True 
+                            "wrap": True  # <--- 關鍵：一定要加這行標籤才會換行顯示
                         },
-                        {"type": "text", "text": s.get('address') or "無地址資訊", "size": "xxs", "color": "#aaaaaa", "wrap": True, "margin": "md"}
+                        {"type": "text", "text": s['address'] or "無地址資訊", "size": "xxs", "color": "#aaaaaa", "wrap": True, "margin": "md"}
                     ]
                 },
                 "footer": {
                     "type": "box", 
                     "layout": "vertical", 
                     "contents": [
-                        {"type": "button", "style": "link", "height": "sm", "action": {"type": "uri", "label": "導航", "uri": f"https://www.google.com/maps/search/?api=1&query={s['lat']},{s['lon']}"}},
-                        {
-                            "type": "button",
-                            "style": "text",
-                            "height": "sm",
-                            "color": "#FF5555",
-                            "action": {
-                                "type": "postback",
-                                "label": "🗑️ 刪除",
-                                "data": f"action=confirm_del&res_id={s['id']}&res_name={s['name']}"
-                            }
-                        }
+                        {"type": "button", "style": "link", "height": "sm", "action": {"type": "uri", "label": "導航", "uri": f"https://www.google.com/maps/search/?api=1&query={s['lat']},{s['lon']}"}}
                     ]
                 }
             })
 
-        # 4. 處理下一頁
+        # 如果有第 11 筆，加入「查看更多」卡片
         if len(shops) > 10:
             bubbles.append({
                 "type": "bubble",
@@ -211,12 +181,7 @@ def handle_message(event):
                 }
             })
 
-        # 5. 最後發送（確保 bubbles 不是空的）
-        if bubbles:
-            line_bot_api.reply_message(
-                event.reply_token, 
-                FlexSendMessage(alt_text="餐廳清單", contents={"type": "carousel", "contents": bubbles})
-            )
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="餐廳清單", contents={"type": "carousel", "contents": bubbles}))
             return
 
     if current_step == "idle":
