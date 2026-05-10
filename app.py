@@ -100,44 +100,45 @@ def handle_message(event):
 
     # B. 根據狀態分流處理對話
     if user_text.startswith("清單:"):
-        # 解析分頁參數，例如 "清單:全部:10" 代表從第 10 筆開始抓
+        # 1. 解析參數
         parts = user_text.split(":")
         offset = int(parts[-1]) if parts[-1].isdigit() else 0
         base_cmd = "清單:全部" if "全部" in user_text else f"清單:分類:{parts[2]}"
 
+        # 2. 撈取資料
         query = supabase.table("restaurants").select("*").eq("user_id", user_id)
         if "分類:" in user_text:
             query = query.eq("category", parts[2])
 
-        # 抓取 11 筆，若有第 11 筆代表有「下一頁」
         res = query.order("created_at", desc=True).range(offset, offset + 10).execute()
         shops = res.data
 
+        # ✨ 防錯機制：如果沒資料，要給個回應，不然機器人會已讀不回
         if not shops:
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text="妳的清單裡目前沒有餐廳喔！"))
             return
 
-        bubbles = []
+        # ✨ 關鍵點：一定要先初始化陣列
+        bubbles = [] 
+        
+        # 3. 跑迴圈產生卡片
         for s in shops[:10]:
             raw_tags = s.get('tags') or "" 
             tag_list = raw_tags.split() 
-        
             tag_contents = []
+
             for tag in tag_list[:3]: 
-                # ✨ 修正點：背景顏色要加在 box 上，text 放裡面
                 tag_contents.append({
                     "type": "box",
                     "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": f"#{tag}",
-                            "size": "xxs",
-                            "color": "#4b7a47",
-                            "align": "center",
-                            "gravity": "center"
-                        }
-                    ],
+                    "contents": [{
+                        "type": "text",
+                        "text": f"#{tag}",
+                        "size": "xxs",
+                        "color": "#4b7a47",
+                        "align": "center",
+                        "gravity": "center"
+                    }],
                     "backgroundColor": "#E8F5E9",
                     "cornerRadius": "4px",
                     "paddingAll": "2px",
@@ -145,7 +146,6 @@ def handle_message(event):
                     "flex": 0
                 })
         
-            # 如果沒有標籤，放一個透明的 box 填位
             if not tag_contents:
                 tag_contents.append({"type": "box", "layout": "vertical", "contents": []})
         
@@ -188,7 +188,7 @@ def handle_message(event):
                 }
             })
 
-        # 如果有第 11 筆，加入「查看更多」卡片
+        # 4. 處理下一頁
         if len(shops) > 10:
             bubbles.append({
                 "type": "bubble",
@@ -205,6 +205,7 @@ def handle_message(event):
                 }
             })
 
+        # 5. 最後發送（確保 bubbles 不是空的）
         if bubbles:
             line_bot_api.reply_message(
                 event.reply_token, 
