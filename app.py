@@ -57,6 +57,11 @@ def handle_message(event):
     user_status = get_user_status(user_id)
     current_step = user_status.get("current_step")
 
+    if user_text in ["選單", "取消", "肚子餓了", "新增餐廳", "我的清單"]:
+        supabase.table("user_status").update({"current_step": "idle"}).eq("user_id", user_id).execute()
+        # 更新 local 變數，確保後面的 if 判斷拿到的是最新的 idle
+        user_status["current_step"] = "idle"
+
     # A. 優先級最高：系統指令
     if user_text == "選單" or user_text == "取消":
         # 強制將狀態重置為 idle
