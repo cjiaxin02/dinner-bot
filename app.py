@@ -103,7 +103,13 @@ def handle_message(event):
         # 1. 解析參數
         parts = user_text.split(":")
         offset = int(parts[-1]) if parts[-1].isdigit() else 0
-        base_cmd = "清單:全部" if "全部" in user_text else f"清單:分類:{parts[2]}"
+        # ✨ 修正：防止 IndexError
+        if "分類:" in user_text:
+            category_name = parts[2]
+            base_cmd = f"清單:分類:{category_name}"
+        else:
+            category_name = None
+            base_cmd = "清單:全部"
 
         # 2. 撈取資料
         query = supabase.table("restaurants").select("*").eq("user_id", user_id)
@@ -211,6 +217,7 @@ def handle_message(event):
                 event.reply_token, 
                 FlexSendMessage(alt_text="餐廳清單", contents={"type": "carousel", "contents": bubbles})
             )
+            return
 
     if current_step == "idle":
         if user_text == "新增餐廳":
