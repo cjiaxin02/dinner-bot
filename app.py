@@ -176,7 +176,19 @@ def handle_message(event):
                 },
                 "footer": {
                     "type": "box", "layout": "vertical", "contents": [
-                        {"type": "button", "style": "primary", "color": "#4b7a47", "action": {"type": "message", "label": "下一頁", "text": f"{base_cmd}:{offset + 10}"}}
+                        {"type": "button", "style": "primary", "color": "#4b7a47", "action": {"type": "message", "label": "下一頁", "text": f"{base_cmd}:{offset + 10}"}},
+                    # ✨ 新增的刪除按鈕
+                        {
+                            "type": "button",
+                            "style": "text", # 使用文字樣式比較不突兀
+                            "height": "sm",
+                            "color": "#FF5555",
+                            "action": {
+                                "type": "postback",
+                                "label": "🗑️ 刪除",
+                                "data": f"action=confirm_del&res_id={s['id']}&res_name={s['name']}"
+                            }
+                        }
                     ]
                 }
             })
@@ -389,12 +401,19 @@ def handle_location(event):
                 tag_contents = []
 
                 # 動態產生標籤的 JSON 組件
-                for tag in tag_list:
+                for tag in tag_list[:3]:
                     tag_contents.append({
                         "type": "box", 
                         "layout": "horizontal", 
                         "contents": [
-                            {"type": "text", "text": f"#{tag}", "size": "xxs", "color": "#4b7a47"}
+                            {
+                                "type": "text",
+                                "text": f"#{tag}",
+                                "size": "xxs",
+                                "color": "#4b7a47",
+                                "align": "center",
+                                "gravity": "center"
+                            }
                         ],
                         "backgroundColor": "#E8F5E9", 
                         "paddingAll": "2px", 
@@ -411,18 +430,18 @@ def handle_location(event):
                   "type": "bubble",
                   "size": "micro", # 使用微型卡片，這樣一次可以滑動看 5 家
                   "body": {
-                    "type": "box", "layout": "vertical", "contents": [
-                        {"type": "text", "text": s['name'], "weight": "bold", "size": "sm", "wrap": True},
-                        {"type": "text", "text": f"{s['dist']} km | {s['category']}", "size": "xxs", "color": "#888888", "margin": "xs"},
-                        {
-                            "type": "box", 
-                            "layout": "horizontal", 
-                            "contents": tag_contents, 
-                            "margin": "md", 
-                            "wrap": True # <--- 關鍵：讓多個小標籤可以自動排版
-                        }
-                    ]
-                  },
+                        "type": "box", "layout": "vertical", "contents": [
+                            {"type": "text", "text": s['name'], "weight": "bold", "size": "sm", "wrap": True},
+                            {"type": "text", "text": f"{s['dist']} km | {s['category']}", "size": "xxs", "color": "#888888", "margin": "xs"},
+                            {
+                                "type": "box", 
+                                "layout": "horizontal", 
+                                "contents": tag_contents, 
+                                "margin": "md", 
+                                "wrap": True  # 關鍵：允許標籤自動換行
+                            }
+                        ]
+                    },
                   "footer": {
                     "type": "box", "layout": "vertical", "contents": [
                       {
