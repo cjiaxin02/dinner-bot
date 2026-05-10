@@ -113,6 +113,11 @@ def handle_message(event):
         res = query.order("created_at", desc=True).range(offset, offset + 10).execute()
         shops = res.data
 
+        if not shops:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="妳的清單裡目前沒有餐廳喔！"))
+            return
+
+        bubbles = []
         for s in shops[:10]:
             raw_tags = s.get('tags') or "" 
             tag_list = raw_tags.split() 
@@ -200,7 +205,11 @@ def handle_message(event):
                 }
             })
 
-        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="餐廳清單", contents={"type": "carousel", "contents": bubbles}))
+        if bubbles:
+            line_bot_api.reply_message(
+                event.reply_token, 
+                FlexSendMessage(alt_text="餐廳清單", contents={"type": "carousel", "contents": bubbles})
+            )
 
     if current_step == "idle":
         if user_text == "新增餐廳":
