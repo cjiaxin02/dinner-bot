@@ -159,7 +159,19 @@ def handle_message(event):
                     "type": "box", 
                     "layout": "vertical", 
                     "contents": [
-                        {"type": "button", "style": "link", "height": "sm", "action": {"type": "uri", "label": "導航", "uri": f"https://www.google.com/maps/search/?api=1&query={s['lat']},{s['lon']}"}}
+                        {"type": "button", "style": "link", "height": "sm", "action": {"type": "uri", "label": "導航", "uri": f"https://www.google.com/maps/search/?api=1&query={s['lat']},{s['lon']}"}},
+                        # ✨ 新增的刪除按鈕
+                        {
+                            "type": "button",
+                            "style": "text", # 使用文字樣式比較不突兀
+                            "height": "sm",
+                            "color": "#FF5555",
+                            "action": {
+                                "type": "postback",
+                                "label": "🗑️ 刪除",
+                                "data": f"action=confirm_del&res_id={s['id']}&res_name={s['name']}"
+                            }
+                        }
                     ]
                 }
             })
@@ -176,19 +188,7 @@ def handle_message(event):
                 },
                 "footer": {
                     "type": "box", "layout": "vertical", "contents": [
-                        {"type": "button", "style": "primary", "color": "#4b7a47", "action": {"type": "message", "label": "下一頁", "text": f"{base_cmd}:{offset + 10}"}},
-                    # ✨ 新增的刪除按鈕
-                        {
-                            "type": "button",
-                            "style": "text", # 使用文字樣式比較不突兀
-                            "height": "sm",
-                            "color": "#FF5555",
-                            "action": {
-                                "type": "postback",
-                                "label": "🗑️ 刪除",
-                                "data": f"action=confirm_del&res_id={s['id']}&res_name={s['name']}"
-                            }
-                        }
+                        {"type": "button", "style": "primary", "color": "#4b7a47", "action": {"type": "message", "label": "下一頁", "text": f"{base_cmd}:{offset + 10}"}}
                     ]
                 }
             })
@@ -412,7 +412,6 @@ def handle_location(event):
                                 "size": "xxs",
                                 "color": "#4b7a47",
                                 "align": "center",
-                                "gravity": "center"
                             }
                         ],
                         "backgroundColor": "#E8F5E9", 
@@ -460,6 +459,8 @@ def handle_location(event):
             # 3. 封裝成 Carousel (輪播介面)
             carousel = {"type": "carousel", "contents": bubbles}
             line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="為妳挑選的餐廳", contents=carousel))
+
+            supabase.table("user_status").update({"current_step": "idle"}).eq("user_id", user_id).execute()
 
 @handler.add(PostbackEvent)
 def handle_postback(event):
