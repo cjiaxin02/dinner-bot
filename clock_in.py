@@ -2,6 +2,14 @@ import os
 from linebot import LineBotApi
 from linebot.models import TextSendMessage
 from supabase import create_client # 記得要用資料庫了
+from datetime import datetime
+import pytz # 需要 pip install pytz
+
+# 強制獲取台北時間
+taipei_tz = pytz.timezone('Asia/Taipei')
+now_in_taiwan = datetime.now(taipei_tz)
+
+print(f"目前台灣時間: {now_in_taiwan.strftime('%Y-%m-%d %H:%M:%S')}")
 
 # 1. 初始化金鑰
 line_bot_api = LineBotApi(os.environ.get('LINE_CHANNEL_ACCESS_TOKEN'))
