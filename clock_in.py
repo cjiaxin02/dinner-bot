@@ -3,21 +3,14 @@ from linebot import LineBotApi
 from linebot.models import TextSendMessage
 from supabase import create_client # 記得要用資料庫了
 
-# 從環境變數讀取金鑰 (保護資安)
 # 1. 初始化金鑰
 line_bot_api = LineBotApi(os.environ.get('LINE_CHANNEL_ACCESS_TOKEN'))
-# 這裡填入妳自己的 LINE User ID (或是從資料庫抓取)
-user_id = os.environ.get('MY_LINE_USER_ID') 
 supabase_url = os.environ.get('SUPABASE_URL')
 supabase_key = os.environ.get('SUPABASE_KEY')
 supabase = create_client(supabase_url, supabase_key)
 
-def send_reminder():
 def send_to_all_users():
     try:
-        msg = "🔔 Dorothy，吃飯時間到了！\n快打開機器人，讓我想想今天吃什麼好料的？"
-        line_bot_api.push_message(user_id, TextSendMessage(text=msg))
-        print("推播成功！")
         # 2. 從資料庫抓取所有不重複的 user_id
         # 假設妳的用戶資料存在 user_status 表
         res = supabase.table("user_status").select("user_id").execute()
@@ -34,9 +27,7 @@ def send_to_all_users():
                 print(f"發送給 {uid} 失敗: {e}")
                 
     except Exception as e:
-        print(f"推播失敗: {e}")
         print(f"資料庫讀取失敗: {e}")
 
 if __name__ == "__main__":
-    send_reminder()
     send_to_all_users()
